@@ -147,7 +147,6 @@ private:
   float value_mu_eta[max_mu];
   float value_mu_phi[max_mu];
   float value_mu_mass[max_mu];
-  float value_mu_E[max_mu];
   int value_mu_charge[max_mu];
   float value_mu_pfreliso03all[max_mu];
   float value_mu_pfreliso04all[max_mu];
@@ -237,13 +236,12 @@ private:
   float value_jet_btag[max_jet];
 */
   // Generator particles
-  const static int max_gen = 10000;
+  const static int max_gen = 1000;
   UInt_t value_gen_n;
   float value_gen_pt[max_gen];
   float value_gen_eta[max_gen];
   float value_gen_phi[max_gen];
   float value_gen_mass[max_gen];
-  float value_gen_E[max_gen];
   int value_gen_pdgid[max_gen];
   int value_gen_status[max_gen];
 };
@@ -276,7 +274,6 @@ AOD2NanoAOD::AOD2NanoAOD(const edm::ParameterSet &iConfig)
   tree->Branch("Muon_eta", value_mu_eta, "Muon_eta[nMuon]/F");
   tree->Branch("Muon_phi", value_mu_phi, "Muon_phi[nMuon]/F");
   tree->Branch("Muon_mass", value_mu_mass, "Muon_mass[nMuon]/F");
-  tree->Branch("Muon_E", value_mu_E, "Muon_E[nMuon]/F");
   tree->Branch("Muon_charge", value_mu_charge, "Muon_charge[nMuon]/I");
   tree->Branch("Muon_pfRelIso03_all", value_mu_pfreliso03all, "Muon_pfRelIso03_all[nMuon]/F");
   tree->Branch("Muon_pfRelIso04_all", value_mu_pfreliso04all, "Muon_pfRelIso04_all[nMuon]/F");
@@ -367,7 +364,6 @@ AOD2NanoAOD::AOD2NanoAOD(const edm::ParameterSet &iConfig)
     tree->Branch("GenPart_pt", value_gen_pt, "GenPart_pt[nGenPart]/F");
     tree->Branch("GenPart_eta", value_gen_eta, "GenPart_eta[nGenPart]/F");
     tree->Branch("GenPart_phi", value_gen_phi, "GenPart_phi[nGenPart]/F");
-    tree->Branch("GenPart_E", value_gen_E, "GenPart_E[nGenPart]/F");
     tree->Branch("GenPart_mass", value_gen_mass, "GenPart_mass[nGenPart]/F");
     tree->Branch("GenPart_pdgId", value_gen_pdgid, "GenPart_pdgId[nGenPart]/I");
     tree->Branch("GenPart_status", value_gen_status, "GenPart_status[nGenPart]/I");
@@ -438,7 +434,6 @@ void AOD2NanoAOD::analyze(const edm::Event &iEvent,
       value_mu_pt[value_mu_n] = it->pt();
       value_mu_eta[value_mu_n] = it->eta();
       value_mu_phi[value_mu_n] = it->phi();
-      value_mu_E[value_mu_n] = it->e();
       value_mu_charge[value_mu_n] = it->charge();
       value_mu_mass[value_mu_n] = it->mass();
       if (it->isPFMuon() && it->isPFIsolationValid()) {
@@ -679,17 +674,16 @@ void AOD2NanoAOD::analyze(const edm::Event &iEvent,
         value_gen_eta[value_gen_n] = g->eta();
         value_gen_phi[value_gen_n] = g->phi();
         value_gen_mass[value_gen_n] = g->mass();
-        //value_gen_E[value_gen_n] = g->e(); ///////Não encontrei como se define a energia no modulo DataFormats/MuonReco/interface/Muon.h
         value_gen_pdgid[value_gen_n] = g->pdgId();
         value_gen_status[value_gen_n] = g->status();
         value_mu_genpartidx[p - selectedMuons.begin()] = value_gen_n;
         value_gen_n++;
       }
-
-      // Jet matching
-      //value_mu_jetidx[p - selectedMuons.begin()] = findBestMatch(selectedJets, p4);
-    }
 /*
+      // Jet matching
+      value_mu_jetidx[p - selectedMuons.begin()] = findBestMatch(selectedJets, p4);
+    }
+
     // Match electrons with gen particles and jets
     for (auto p = selectedElectrons.begin(); p != selectedElectrons.end(); p++) {
       // Gen particle matching
