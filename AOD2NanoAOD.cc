@@ -4,6 +4,8 @@
 // Class:      AOD2NanoAOD
 
 #include <memory>
+#include <cmath>
+#include <vector>
 
 #include "FWCore/Framework/interface/EDAnalyzer.h"
 #include "FWCore/Framework/interface/Frameworkfwd.h"
@@ -12,6 +14,12 @@
 #include "FWCore/Framework/interface/MakerMacros.h"
 
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
+
+#include "TLorentzVector.h"
+
+// TFileService
+#include "FWCore/ServiceRegistry/interface/Service.h"
+#include "CommonTools/UtilAlgos/interface/TFileService.h"
 
 #include "CommonTools/UtilAlgos/interface/TFileService.h"
 #include "DataFormats/Common/interface/Ref.h"
@@ -23,6 +31,7 @@
 
 #include "TFile.h"
 #include "TTree.h"
+#include <TROOT.h>
 
 #include "DataFormats/TrackReco/interface/HitPattern.h"
 #include "DataFormats/TrackReco/interface/Track.h"
@@ -34,6 +43,10 @@
 #include "DataFormats/MuonReco/interface/Muon.h"
 #include "DataFormats/MuonReco/interface/MuonFwd.h"
 #include "DataFormats/MuonReco/interface/MuonSelectors.h"
+
+#include "DataFormats/ParticleFlowCandidate/interface/PFCandidate.h"
+#include "DataFormats/ParticleFlowCandidate/interface/PFCandidateFwd.h"
+
 
 #include "DataFormats/EgammaCandidates/interface/Photon.h"
 #include "DataFormats/EgammaCandidates/interface/PhotonFwd.h"
@@ -61,6 +74,10 @@
 #include "FWCore/Common/interface/TriggerNames.h"
 #include "FWCore/Common/interface/TriggerResultsByName.h"
 #include "FWCore/ParameterSet/interface/Registry.h"
+
+#include "DataFormats/HLTReco/interface/TriggerEvent.h"
+#include "DataFormats/HLTReco/interface/TriggerTypeDefs.h"
+#include "HLTrigger/HLTcore/interface/HLTConfigProvider.h"
 
 const static std::vector<std::string> interestingTriggers = {
     "HLT_IsoMu24_eta2p1",
@@ -124,6 +141,8 @@ private:
   bool isData;
 
   TTree *tree;
+  TTree* AnalysisTree;
+  TTree* PlotControl;
 
   // Event information
   Int_t value_run;
@@ -148,6 +167,7 @@ private:
   float value_mu_phi[max_mu];
   float value_mu_mass[max_mu];
   float value_mu_E[max_mu];
+  float value_mu_t[max_mu];
   int value_mu_charge[max_mu];
   float value_mu_pfreliso03all[max_mu];
   float value_mu_pfreliso04all[max_mu];
@@ -159,6 +179,28 @@ private:
   float value_mu_dzErr[max_mu];
   int value_mu_genpartidx[max_mu];
   int value_mu_jetidx[max_mu];
+
+  double M = 0.;
+
+  TLorentzVector mu_1;
+  TLorentzVector mu_2;
+  TLorentzVector mu1mu2;
+
+  int nDimuon = 0;
+  int TagAndProbes = 0;
+
+  float TagMuon_Pt[max_mu];
+  float TagMuon_Eta[max_mu];
+  float TagMuon_Phi[max_mu];
+
+  float ProbeMuon_Pt[max_mu];
+  float ProbeMuon_Eta[max_mu];
+  float ProbeMuon_Phi[max_mu];
+
+  float InvariantMass[max_mu];
+
+  int PassingProbeGlobalMuon;
+  int FailingProbeGlobalMuon;
 /*
   // Electrons
   const static int max_el = 1000;
@@ -242,6 +284,7 @@ private:
   float value_gen_pt[max_gen];
   float value_gen_eta[max_gen];
   float value_gen_phi[max_gen];
+  float value_gen_t[max_gen];  
   float value_gen_mass[max_gen];
   float value_gen_E[max_gen];
   int value_gen_pdgid[max_gen];
@@ -253,6 +296,8 @@ AOD2NanoAOD::AOD2NanoAOD(const edm::ParameterSet &iConfig)
   edm::Service<TFileService> fs;
 
   tree = fs->make<TTree>("Events", "Events");
+  AnalysisTree = fs->make<TTree>("AnalysisTree","Muon Analysis Tree");
+  PlotControl = fs->make<TTree>("PlotControl","Muon Analysis Tree");
 
   // Event information
   tree->Branch("run", &value_run);
@@ -277,6 +322,7 @@ AOD2NanoAOD::AOD2NanoAOD(const edm::ParameterSet &iConfig)
   tree->Branch("Muon_phi", value_mu_phi, "Muon_phi[nMuon]/F");
   tree->Branch("Muon_mass", value_mu_mass, "Muon_mass[nMuon]/F");
   tree->Branch("Muon_E", value_mu_E, "Muon_E[nMuon]/F");
+  tree->Branch("Muon_t", value_mu_t, "Muon_t[nMuon]/F");
   tree->Branch("Muon_charge", value_mu_charge, "Muon_charge[nMuon]/I");
   tree->Branch("Muon_pfRelIso03_all", value_mu_pfreliso03all, "Muon_pfRelIso03_all[nMuon]/F");
   tree->Branch("Muon_pfRelIso04_all", value_mu_pfreliso04all, "Muon_pfRelIso04_all[nMuon]/F");
@@ -288,6 +334,22 @@ AOD2NanoAOD::AOD2NanoAOD(const edm::ParameterSet &iConfig)
   tree->Branch("Muon_dzErr", value_mu_dzErr, "Muon_dzErr[nMuon]/F");
   tree->Branch("Muon_jetIdx", value_mu_jetidx, "Muon_jetIdx[nMuon]/I");
   tree->Branch("Muon_genPartIdx", value_mu_genpartidx, "Muon_genPartIdx[nMuon]/I");
+
+  PlotControl->Branch("TagMuon_Pt", &TagMuon_Pt, "TagMuon_Pt/D");
+  PlotControl->Branch("TagMuon_Eta", &TagMuon_Eta, "TagMuon_Eta/D");
+  PlotControl->Branch("TagMuon_Phi", &TagMuon_Phi, "TagMuon_Phi/D");
+
+  PlotControl->Branch("ProbeMuon_Pt", &ProbeMuon_Pt, "ProbeMuon_Pt/D");
+  PlotControl->Branch("ProbeMuon_Eta", &ProbeMuon_Eta, "ProbeMuon_Eta/D");
+  PlotControl->Branch("ProbeMuon_Phi", &ProbeMuon_Phi, "ProbeMuon_Phi/D");
+
+  AnalysisTree->Branch("InvariantMass", &InvariantMass, "InvariantMass/D");
+
+  AnalysisTree->Branch("PassingProbeGlobalMuon", 		&PassingProbeGlobalMuon, 		"PassingProbeGlobalMuon/I");
+  AnalysisTree->Branch("FailingProbeGlobalMuon", 		&FailingProbeGlobalMuon, 		"FailingProbeGlobalMuon/I");
+
+
+
 /*
   // Electrons
   tree->Branch("nElectron", &value_el_n, "nElectron/i");
@@ -367,6 +429,7 @@ AOD2NanoAOD::AOD2NanoAOD(const edm::ParameterSet &iConfig)
     tree->Branch("GenPart_pt", value_gen_pt, "GenPart_pt[nGenPart]/F");
     tree->Branch("GenPart_eta", value_gen_eta, "GenPart_eta[nGenPart]/F");
     tree->Branch("GenPart_phi", value_gen_phi, "GenPart_phi[nGenPart]/F");
+    tree->Branch("GenPart_t", value_gen_t, "GenPart_t[nGenPart]/F");
     tree->Branch("GenPart_E", value_gen_E, "GenPart_E[nGenPart]/F");
     tree->Branch("GenPart_mass", value_gen_mass, "GenPart_mass[nGenPart]/F");
     tree->Branch("GenPart_pdgId", value_gen_pdgid, "GenPart_pdgId[nGenPart]/I");
@@ -438,7 +501,6 @@ void AOD2NanoAOD::analyze(const edm::Event &iEvent,
       value_mu_pt[value_mu_n] = it->pt();
       value_mu_eta[value_mu_n] = it->eta();
       value_mu_phi[value_mu_n] = it->phi();
-      value_mu_E[value_mu_n] = it->e();
       value_mu_charge[value_mu_n] = it->charge();
       value_mu_mass[value_mu_n] = it->mass();
       if (it->isPFMuon() && it->isPFIsolationValid()) {
@@ -469,7 +531,62 @@ void AOD2NanoAOD::analyze(const edm::Event &iEvent,
       value_mu_genpartidx[value_mu_n] = -1;
       value_mu_jetidx[value_mu_n] = -1;
       value_mu_n++;
-    }
+
+      if (selectedMuons.size() >= 2) {
+      	reco::Muon leadingMuon = selectedMuons[0];//first muon - with highest Pt
+		reco::Muon trailingMuon = selectedMuons[1];//second muon - with the second highest Pt
+
+						//Loretz Vector of the Muon
+		mu_1.SetPtEtaPhiM(leadingMuon.pt(), leadingMuon.eta(), leadingMuon.phi(), leadingMuon.mass());
+		mu_2.SetPtEtaPhiM(trailingMuon.pt(), trailingMuon.eta(), trailingMuon.phi(), trailingMuon.mass());
+				
+		//Unvariant Mass of two Particles
+		M = (mu_1+mu_2).M();
+
+
+		if ( leadingMuon.charge() == trailingMuon.charge() )	continue;
+		nDimuon++;
+		if( muon::isTightMuon(*it, *vertices->begin()) )
+		{
+			TagAndProbes++;			
+			//std::cout<< "TagMuon.pt(): "<< leadingMuon.pt() << " ProbeMuon.pt(): " << trailingMuon.pt()<< std::endl;
+
+			TagMuon_Pt = leadingMuon.pt();
+			TagMuon_Eta = leadingMuon.eta();
+			TagMuon_Phi = leadingMuon.phi();
+
+			ProbeMuon_Pt = trailingMuon.pt();
+			ProbeMuon_Eta = trailingMuon.eta();
+			ProbeMuon_Phi = trailingMuon.phi();
+
+			InvariantMass = M;
+
+      } //Tag end prog
+    }// if(selectedMuons.size() >= 2)
+	if ( trailingMuon.isGlobalMuon() )
+	{
+	PassingProbeGlobalMuon = 1;
+	FailingProbeGlobalMuon = 0;
+	}
+	else
+	{
+	PassingProbeGlobalMuon = 0;
+	FailingProbeGlobalMuon = 1;
+	}
+
+	//std::cout<< "Filling Varaibles: "<< std::endl;
+	AnalysisTree->Fill();
+	PlotControl->Fill();
+
+    TagMuon_Pt = 0.;
+	TagMuon_Eta = 0.;
+	TagMuon_Phi = 0.;
+
+	ProbeMuon_Pt = 0.;
+	ProbeMuon_Eta = 0.;
+	ProbeMuon_Phi = 0.;
+
+	InvariantMass = 0.;
   }
 /*
   // Electrons
@@ -679,7 +796,8 @@ void AOD2NanoAOD::analyze(const edm::Event &iEvent,
         value_gen_eta[value_gen_n] = g->eta();
         value_gen_phi[value_gen_n] = g->phi();
         value_gen_mass[value_gen_n] = g->mass();
-        //value_gen_E[value_gen_n] = g->e(); ///////Não encontrei como se define a energia no modulo DataFormats/MuonReco/interface/Muon.h
+        //value_gen_t[value_gen_n] = g->isTimeValid();
+        //value_gen_E[value_gen_n] = g->isEnergyValid();
         value_gen_pdgid[value_gen_n] = g->pdgId();
         value_gen_status[value_gen_n] = g->status();
         value_mu_genpartidx[p - selectedMuons.begin()] = value_gen_n;
